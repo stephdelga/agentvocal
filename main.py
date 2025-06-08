@@ -1,12 +1,12 @@
 import os
-import openai
+from openai import OpenAI
 from fastapi import FastAPI, Response, Form
 
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RAILWAY_URL = os.getenv("RAILWAY_URL", "agentvocal-production.up.railway.app")
 
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
 
@@ -74,8 +74,8 @@ def handle_response(
     
     try:
         # Appel à OpenAI pour générer une réponse intelligente
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system", 
@@ -130,8 +130,8 @@ def wait_for_response():
 def test_ai(question: str = Form(...)):
     """Test de l'IA via formulaire"""
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "Tu es un assistant français utile."},
                 {"role": "user", "content": question}
