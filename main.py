@@ -1,18 +1,21 @@
 import os
-from openai import OpenAI
 from fastapi import FastAPI, Response, Form
 
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RAILWAY_URL = os.getenv("RAILWAY_URL", "agentvocal-production.up.railway.app")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+print(f"🔑 OpenAI Key présente: {'Oui' if OPENAI_API_KEY else 'Non'}")
 
 app = FastAPI()
 
 @app.get("/")
 def root():
-    return {"status": "OK", "message": "Assistant vocal intelligent actif"}
+    return {
+        "status": "OK", 
+        "message": "Assistant vocal intelligent actif",
+        "openai_configured": bool(OPENAI_API_KEY)
+    }
 
 @app.post("/incoming-call")
 def incoming_call():
@@ -47,7 +50,6 @@ def process_voice(RecordingUrl: str = Form(...), CallSid: str = Form(...)):
     print(f"🎵 Enregistrement reçu: {RecordingUrl}")
     print(f"📞 Call ID: {CallSid}")
     
-    # Pendant que Twilio transcrit, on dit qu'on traite
     twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="alice" language="fr-FR">
@@ -69,52 +71,25 @@ def handle_response(
     CallSid: str = Form(...),
     RecordingUrl: str = Form(...)
 ):
-    """Reçoit la transcription et génère une réponse avec OpenAI"""
+    """Reçoit la transcription et génère une réponse"""
     print(f"📝 Transcription: {TranscriptionText}")
     
-    try:
-        # Appel à OpenAI pour générer une réponse intelligente
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system", 
-                    "content": """Tu es un assistant vocal français professionnel et amical.
-                    Tu aides les clients avec leurs questions.
-                    Réponds de manière claire, concise et utile.
-                    Si on te demande des tarifs, dis que tu vas chercher les informations."""
-                },
-                {
-                    "role": "user", 
-                    "content": TranscriptionText
-                }
-            ],
-            max_tokens=150,
-            temperature=0.7
-        )
-        
-        ai_response = response.choices[0].message.content
-        print(f"🤖 Réponse IA: {ai_response}")
-        
-        # Stocker la réponse pour le prochain appel
-        # (Dans une vraie app, utiliser une base de données)
-        # Pour l'instant, on log juste
-        
-        return {"status": "success", "response": ai_response, "call_sid": CallSid}
-        
-    except Exception as e:
-        print(f"❌ Erreur OpenAI: {e}")
-        return {"status": "error", "message": str(e)}
+    # Réponse simple sans OpenAI pour l'instant
+    simple_response = f"J'ai bien entendu: {TranscriptionText}. Merci pour votre message!"
+    
+    print(f"💬 Réponse simple: {simple_response}")
+    
+    return {"status": "success", "response": simple_response, "call_sid": CallSid}
 
 @app.get("/wait-for-response")
 def wait_for_response():
-    """Endpoint temporaire en attendant une vraie gestion des réponses"""
+    """Endpoint temporaire"""
     twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="alice" language="fr-FR">
         Merci pour votre question ! 
-        Votre demande a été traitée par intelligence artificielle.
-        Bientôt, je pourrai vous répondre directement par téléphone !
+        Votre demande a été reçue et traitée.
+        L'intelligence artificielle sera bientôt intégrée !
     </Say>
     <Pause length="1"/>
     <Say voice="alice" language="fr-FR">
@@ -125,19 +100,11 @@ def wait_for_response():
     
     return Response(content=twiml, media_type="application/xml")
 
-# Endpoint pour tester OpenAI
-@app.post("/test-ai")
-def test_ai(question: str = Form(...)):
-    """Test de l'IA via formulaire"""
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Tu es un assistant français utile."},
-                {"role": "user", "content": question}
-            ],
-            max_tokens=100
-        )
-        return {"question": question, "response": response.choices[0].message.content}
-    except Exception as e:
-        return {"error": str(e)}
+@app.post("/test-simple")
+def test_simple(question: str = Form(...)):
+    """Test simple sans OpenAI"""
+    return {
+        "question": question, 
+        "response": f"Test reçu: {question}",
+        "openai_key_present": bool(OPENAI_API_KEY)
+    }
