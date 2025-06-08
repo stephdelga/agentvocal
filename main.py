@@ -4,7 +4,7 @@ app = FastAPI()
 
 @app.get("/")
 def root():
-    return {"status": "OK"}
+    return {"status": "OK"} 
 
 @app.post("/incoming-call")
 def incoming_call():
