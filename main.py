@@ -7,6 +7,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RAILWAY_URL      = os.getenv("RAILWAY_URL")
 
 OPENAI_WS = "wss://api.openai.com/v1/realtime?model=speech-s2s-1"
+print(f"🚀 RAILWAY_URL = {RAILWAY_URL}")
+print(f"🚀 OPENAI_API_KEY present? {'yes' if OPENAI_API_KEY else 'no'}")
 
 app = FastAPI()
 
