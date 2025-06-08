@@ -37,7 +37,7 @@ async def incoming_call(request: Request):
         <Say voice="alice" language="fr-FR">
             Prochaine étape : intégrer OpenAI pour des conversations intelligentes !
         </Say>
-        <Pause length="1"/>
+        <Pause length="1"/> 
         <Hangup/>
     </Response>"""
     
