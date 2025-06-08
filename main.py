@@ -4,7 +4,7 @@ app = FastAPI()
 
 @app.get("/")
 def hello():
-    return {"message": "Hello Stéphane 👋"}
+    return {"message": "Hello Stéphane ca va ? 👋"}
 
 @app.websocket("/media-stream")
 async def media_stream(websocket: WebSocket):
