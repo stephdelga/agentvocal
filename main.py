@@ -1,46 +1,66 @@
+import os, json, base64, asyncio
+import websockets
 from fastapi import FastAPI, WebSocket, Request, Response
 from twilio.twiml.voice_response import VoiceResponse, Connect
-import json
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+RAILWAY_URL      = os.getenv("RAILWAY_URL")
+
+OPENAI_WS = "wss://api.openai.com/v1/realtime?model=speech-s2s-1"
 
 app = FastAPI()
 
-@app.get("/")
-async def hello():
-    return {"message": "hello stéphane 👋"}
-
 @app.post("/incoming-call")
 async def incoming_call(request: Request):
-    # renvoie le TwiML qui indique à Twilio d’ouvrir le WebSocket
     resp = VoiceResponse()
     conn = Connect()
-    conn.stream(url="wss://TON_DOMAINE_RAILWAY/media-stream")
+    conn.stream(url=f"wss://{RAILWAY_URL}/media-stream")
     resp.append(conn)
     return Response(content=str(resp), media_type="application/xml")
 
 @app.websocket("/media-stream")
-async def media_stream(websocket: WebSocket):
-    await websocket.accept()
-    print("connexion WebSocket établie")
+async def media_stream(ws: WebSocket):
+    await ws.accept()
+    print("→ connexion Twilio OK")
 
-    try:
-        while True:
-            raw = await websocket.receive_text()
-            msg = json.loads(raw)
+    # ouvrir le WebSocket vers OpenAI
+    openai_ws = await websockets.connect(
+        OPENAI_WS,
+        extra_headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    )
+    await openai_ws.send(json.dumps({"kind": "session_start"}))
+    print("→ session OpenAI démarrée")
 
-            if msg.get("event") == "start":
-                print("▶️ appel démarré")
+    async def relay_to_openai():
+        try:
+            while True:
+                data = json.loads(await ws.receive_text())
+                if data["event"] == "media":
+                    audio = base64.b64decode(data["media"]["payload"])
+                    await openai_ws.send(audio)
+                elif data["event"] == "stop":
+                    break
+        finally:
+            await openai_ws.send(json.dumps({"kind": "session_end"}))
 
-            elif msg.get("event") == "media":
-                payload = msg["media"]["payload"]
-                print(f"🎧 audio reçu (début) : {payload[:30]}...")
+    async def relay_to_twilio():
+        try:
+            while True:
+                chunk = await openai_ws.recv()
+                if isinstance(chunk, bytes):
+                    b64 = base64.b64encode(chunk).decode()
+                    await ws.send_text(json.dumps({
+                        "event": "media",
+                        "media": {"payload": b64}
+                    }))
+                else:
+                    info = json.loads(chunk)
+                    if info.get("type") == "session_end":
+                        break
+        finally:
+            pass
 
-            elif msg.get("event") == "stop":
-                print("⏹ appel terminé")
-                break
-
-    except Exception as e:
-        print(f"❌ erreur WebSocket : {e}")
-
-    finally:
-        await websocket.close()
-        print("🔌 WebSocket fermé")
+    await asyncio.gather(relay_to_openai(), relay_to_twilio())
+    await openai_ws.close()
+    await ws.close()
+    print("→ connexions fermées")
