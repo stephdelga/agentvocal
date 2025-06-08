@@ -1,4 +1,5 @@
 import os
+import sys
 from fastapi import FastAPI, Response, Form
 
 # Configuration
@@ -6,6 +7,31 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RAILWAY_URL = os.getenv("RAILWAY_URL", "agentvocal-production.up.railway.app")
 
 print(f"🔑 OpenAI Key présente: {'Oui' if OPENAI_API_KEY else 'Non'}")
+print(f"🔑 OpenAI Key length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
+print(f"🐍 Python version: {sys.version}")
+
+# Test d'import OpenAI avec diagnostics détaillés
+openai_client = None
+openai_error = None
+
+try:
+    print("📦 Tentative d'import OpenAI...")
+    from openai import OpenAI
+    print("✅ Import OpenAI réussi")
+    
+    if OPENAI_API_KEY:
+        print("🔧 Création du client OpenAI...")
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        print("✅ Client OpenAI créé avec succès")
+    else:
+        print("❌ Pas de clé API OpenAI")
+        
+except ImportError as e:
+    openai_error = f"Import Error: {e}"
+    print(f"❌ Erreur d'import OpenAI: {e}")
+except Exception as e:
+    openai_error = f"Autre erreur: {e}"
+    print(f"❌ Erreur création client OpenAI: {e}")
 
 app = FastAPI()
 
@@ -14,86 +40,52 @@ def root():
     return {
         "status": "OK", 
         "message": "Assistant vocal intelligent actif",
-        "openai_configured": bool(OPENAI_API_KEY)
+        "openai_configured": bool(openai_client),
+        "openai_key_present": bool(OPENAI_API_KEY),
+        "openai_key_length": len(OPENAI_API_KEY) if OPENAI_API_KEY else 0,
+        "openai_error": openai_error,
+        "python_version": sys.version
     }
+
+@app.get("/debug")
+def debug():
+    """Endpoint de debug détaillé"""
+    try:
+        # Test des imports
+        import_results = {}
+        
+        try:
+            import openai
+            import_results["openai"] = "✅ OK"
+        except Exception as e:
+            import_results["openai"] = f"❌ {e}"
+            
+        try:
+            from openai import OpenAI
+            import_results["openai.OpenAI"] = "✅ OK"
+        except Exception as e:
+            import_results["openai.OpenAI"] = f"❌ {e}"
+        
+        return {
+            "imports": import_results,
+            "env_vars": {
+                "OPENAI_API_KEY": "Present" if OPENAI_API_KEY else "Missing",
+                "RAILWAY_URL": RAILWAY_URL
+            },
+            "python_path": sys.path[:3]  # Premier 3 chemins
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/incoming-call")
 def incoming_call():
     """Point d'entrée pour les appels Twilio"""
-    print("📞 Appel reçu - démarrage conversation intelligente")
-    
-    twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="alice" language="fr-FR">
-        Bonjour ! Je suis votre assistant vocal intelligent. 
-        Posez-moi une question après le bip, je vous répondrai.
-    </Say>
-    <Record 
-        action="https://{RAILWAY_URL}/process-voice"
-        method="POST"
-        maxLength="30"
-        timeout="5"
-        finishOnKey="#"
-        transcribe="true"
-        transcribeCallback="https://{RAILWAY_URL}/handle-response"
-    />
-    <Say voice="alice" language="fr-FR">
-        Je n'ai pas entendu votre question. Au revoir !
-    </Say>
-</Response>'''
-    
-    return Response(content=twiml, media_type="application/xml")
-
-@app.post("/process-voice")
-def process_voice(RecordingUrl: str = Form(...), CallSid: str = Form(...)):
-    """Traite l'enregistrement vocal de l'utilisateur"""
-    print(f"🎵 Enregistrement reçu: {RecordingUrl}")
-    print(f"📞 Call ID: {CallSid}")
+    print("📞 Appel reçu")
     
     twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="alice" language="fr-FR">
-        Un moment, je traite votre demande...
-    </Say>
-    <Pause length="3"/>
-    <Say voice="alice" language="fr-FR">
-        Je vous prépare une réponse intelligente.
-    </Say>
-    <Pause length="2"/>
-    <Redirect>/wait-for-response</Redirect>
-</Response>'''
-    
-    return Response(content=twiml, media_type="application/xml")
-
-@app.post("/handle-response")
-def handle_response(
-    TranscriptionText: str = Form(...), 
-    CallSid: str = Form(...),
-    RecordingUrl: str = Form(...)
-):
-    """Reçoit la transcription et génère une réponse"""
-    print(f"📝 Transcription: {TranscriptionText}")
-    
-    # Réponse simple sans OpenAI pour l'instant
-    simple_response = f"J'ai bien entendu: {TranscriptionText}. Merci pour votre message!"
-    
-    print(f"💬 Réponse simple: {simple_response}")
-    
-    return {"status": "success", "response": simple_response, "call_sid": CallSid}
-
-@app.get("/wait-for-response")
-def wait_for_response():
-    """Endpoint temporaire"""
-    twiml = '''<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="alice" language="fr-FR">
-        Merci pour votre question ! 
-        Votre demande a été reçue et traitée.
-        L'intelligence artificielle sera bientôt intégrée !
-    </Say>
-    <Pause length="1"/>
-    <Say voice="alice" language="fr-FR">
-        Au revoir !
+        Bonjour ! Version diagnostic active. Test en cours.
     </Say>
     <Hangup/>
 </Response>'''
@@ -106,5 +98,5 @@ def test_simple(question: str = Form(...)):
     return {
         "question": question, 
         "response": f"Test reçu: {question}",
-        "openai_key_present": bool(OPENAI_API_KEY)
+        "openai_available": bool(openai_client)
     }
